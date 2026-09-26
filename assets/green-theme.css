@@ -1,0 +1,42 @@
+:root{--ink:#16352d;--muted:#668079;--line:#dcebe5;--green:#218b68;--teal:#149b8a;--bg:#f3faf7;--shadow:0 14px 34px rgba(22,91,70,.09)}
+body{background:var(--bg)}
+.sidebar{background:linear-gradient(180deg,#123d35,#0e302d)}
+.brand{color:#f6fffb}
+.brand-logo{width:38px;height:38px;object-fit:contain;border-radius:9px;background:#fff;padding:3px}
+.brand-mark{background:#c9edc1;color:#124739}
+.brand small,.user-chip small{color:#9fcabd}
+.workspace-switcher{border-color:#2b6659;color:#d8f1e7}
+.nav-label{color:#7fb1a1}
+.nav-link{color:#a9d1c4}
+.nav-link:hover,.nav-link.active{background:#216354}
+.nav-link.active{box-shadow:inset 3px 0 #bde879}
+.nav-count{background:#e19445}
+.help-card{border-color:#2b6659;background:#174b41}
+.help-icon{background:#c8ebba;color:#17473c}
+.button-primary{background:#218b68;box-shadow:0 7px 15px #218b682a}
+.text-button{color:#1b8061}
+.hero{background:linear-gradient(110deg,#177a63,#238f6d 60%,#56a97d)}
+.hero .eyebrow{color:#c9eee0}
+.hero-decoration span{background:#c9ec79}
+.hero-decoration span:nth-child(3){background:#92e0be}
+.metric-blue{background:linear-gradient(140deg,#177761,#37a879)}
+.metric-purple{background:linear-gradient(140deg,#477968,#7cbf91)}
+.metric-orange{background:linear-gradient(140deg,#d77e35,#f0b36e)}
+.metric-red{background:linear-gradient(140deg,#bd565c,#df8a7c)}
+.metric-icon{color:#dcf087}
+.flow-step.done span{background:#d9f2e9;color:#1e8566}
+.flow-step.current span{background:#dcefe1;color:#31845d;box-shadow:0 0 0 5px #eef9f0}
+.flow-line.done{background:#77c7a8}
+.flow-line.active{background:linear-gradient(90deg,#77c7a8,#a4d58a)}
+.status-dot,.dot{background:#8fdb71}
+.guide-panel{background:#f0f9f5;border-color:#d4ebe1}
+.guide-illustration{color:#218b68}
+.table-icon{background:#e4f4ee;color:#218b68}
+.login-page{background:linear-gradient(135deg,#0e3a34,#218b68)}
+.login-card .brand{color:var(--ink)}
+.login-logo{width:48px;height:48px}
+.site-link{display:block;text-align:center;margin-top:18px;color:#218b68;font-size:11px;text-decoration:none;font-weight:700}
+.site-footer{margin-left:252px;padding:18px 42px 24px;border-top:1px solid #dcebe5;background:#edf8f3;color:#668079;display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:10px}
+.site-footer strong{color:#24604f;font-size:11px}
+.site-footer a{color:#218b68;text-decoration:none;font-weight:700}
+@media(max-width:700px){.site-footer{margin-left:0;padding:18px 15px;display:grid;gap:6px}}
