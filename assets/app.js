@@ -47,20 +47,135 @@ qsa('.flash').forEach(el => {
   });
 })();
 
-/* ── Add-form panel: smooth scroll and highlight when ＋ button clicked ─── */
-qsa('a[href^="#add-"], a[href^="#add"]').forEach(btn => {
-  btn.addEventListener('click', e => {
-    e.preventDefault();
-    const target = qs(btn.getAttribute('href'));
-    if (!target) return;
-    // Remove prior highlights
-    qsa('.form-card.form-open').forEach(el => el.classList.remove('form-open'));
-    target.classList.add('form-open');
-    setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
-    // Focus first input in the form
-    setTimeout(() => { const inp = target.querySelector('input:not([type=hidden]),select'); if(inp) inp.focus(); }, 300);
+/* ── Slide-over Modal Drawer System for Form Cards ────────────────────────── */
+(function initDrawerSystem() {
+  // 1. Ensure shared backdrop exists in DOM
+  let backdrop = qs('#drawer-backdrop');
+  if (!backdrop) {
+    backdrop = document.createElement('div');
+    backdrop.id = 'drawer-backdrop';
+    backdrop.className = 'drawer-backdrop';
+    document.body.appendChild(backdrop);
+  }
+
+  const formCards = qsa('.system-grid > .form-card');
+  if (!formCards.length) return;
+
+  let activeDrawer = null;
+
+  window.openDrawer = function(targetEl) {
+    if (typeof targetEl === 'string') {
+      targetEl = qs(targetEl.startsWith('#') ? targetEl : `#${targetEl}`);
+    }
+    if (!targetEl) return;
+    if (activeDrawer && activeDrawer !== targetEl) {
+      activeDrawer.classList.remove('drawer-open');
+    }
+    activeDrawer = targetEl;
+    targetEl.classList.add('drawer-open');
+    backdrop.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    setTimeout(() => {
+      const firstInput = qs('input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])', targetEl);
+      if (firstInput) firstInput.focus();
+    }, 280);
+  };
+
+  window.closeDrawer = function() {
+    if (activeDrawer) {
+      activeDrawer.classList.remove('drawer-open');
+      activeDrawer = null;
+    }
+    backdrop.classList.remove('active');
+    document.body.style.overflow = '';
+    if (window.location.hash && qs(window.location.hash)) {
+      try {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      } catch (err) {}
+    }
+  };
+
+  // Enhance each form card inside .system-grid
+  formCards.forEach(card => {
+    if (!qs('.drawer-header', card)) {
+      const h2 = qs('h2', card);
+      const header = document.createElement('div');
+      header.className = 'drawer-header';
+
+      const titleWrap = document.createElement('div');
+      titleWrap.className = 'drawer-title-wrap';
+      if (h2) {
+        titleWrap.appendChild(h2);
+      } else {
+        const defH2 = document.createElement('h2');
+        defH2.textContent = 'Add Entry';
+        titleWrap.appendChild(defH2);
+      }
+      header.appendChild(titleWrap);
+
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'drawer-close-btn';
+      closeBtn.title = 'Close dialog (Esc)';
+      closeBtn.innerHTML = '✕';
+      closeBtn.addEventListener('click', window.closeDrawer);
+      header.appendChild(closeBtn);
+
+      // Collect all remaining children into drawer-body
+      const body = document.createElement('div');
+      body.className = 'drawer-body';
+      while (card.firstChild) {
+        body.appendChild(card.firstChild);
+      }
+
+      card.appendChild(header);
+      card.appendChild(body);
+
+      // Add a Cancel button next to the primary submit button in the form if present
+      const submitBtn = qs('button[type="submit"], input[type="submit"]', body);
+      if (submitBtn && submitBtn.parentElement && !qs('.drawer-cancel-btn', submitBtn.parentElement)) {
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'button button-light drawer-cancel-btn';
+        cancelBtn.style.cssText = 'padding:6px 14px;font-size:12px;cursor:pointer;margin-left:8px';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', window.closeDrawer);
+        submitBtn.insertAdjacentElement('afterend', cancelBtn);
+      }
+    }
   });
-});
+
+  // Backdrop click closes drawer
+  backdrop.addEventListener('click', window.closeDrawer);
+
+  // Escape key closes drawer
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && activeDrawer) {
+      window.closeDrawer();
+    }
+  });
+
+  // Intercept all links targeting #add-..., #inspect-..., #view-..., or #edit-...
+  qsa('a[href^="#add-"], a[href^="#add"], a[href^="#inspect-"], a[href^="#inspect"], a[href^="#view-"], a[href^="#view"], a[href^="#edit-"], a[href^="#edit"]').forEach(link => {
+    link.addEventListener('click', e => {
+      const hash = link.getAttribute('href');
+      const target = qs(hash);
+      if (target && target.classList.contains('form-card')) {
+        e.preventDefault();
+        window.openDrawer(target);
+      }
+    });
+  });
+
+  // Auto-open if URL has hash matching a form-card
+  if (window.location.hash) {
+    const initialTarget = qs(window.location.hash);
+    if (initialTarget && initialTarget.classList.contains('form-card')) {
+      setTimeout(() => window.openDrawer(initialTarget), 150);
+    }
+  }
+})();
 
 /* ── Universal table search (instant filter from 1st letter) ─────────────── */
 function attachTableSearch(inputSel, tableSel) {
@@ -174,23 +289,70 @@ makeAddRowButton('po-items', () => {
           <input name="qty[]"  type="number" min="1" placeholder="Qty"  style="width:70px">
           <input name="unit[]" placeholder="Unit" style="width:60px">
           <input name="rate[]" type="number" step="0.01" placeholder="Rate" style="width:90px">
-          <input name="tax[]"  type="number" step="0.01" placeholder="Tax"  style="width:70px">`;
+          <input name="tax[]"  type="number" step="0.01" placeholder="Tax"  style="width:70px">
+          <label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;margin:0"><input type="checkbox" name="warranty[]" value="1"> Warranty</label>`;
 });
 
 // ── GRN items ──────────────────────────────────────────────────────────────
 makeAddRowButton('grn-items', () => {
   const opts = poItemOptions();
-  return `<input class="item-barcode" name="item_code[]" placeholder="Scan item code" autocomplete="off" style="width:125px">
-          <select name="item_id[]" style="min-width:160px"><option value="">— Item —</option>${opts}</select>
-          <input name="qty_ordered[]"  type="number" min="0" placeholder="Ordered"  style="width:70px">
-          <input name="qty_received[]" type="number" min="0" placeholder="Received" style="width:70px">
-          <input name="qty_accepted[]" type="number" min="0" placeholder="Accepted" style="width:70px">
-          <input name="qty_rejected[]" type="number" min="0" placeholder="Rejected" style="width:70px">
-          <input name="batch[]"        placeholder="Batch" style="width:90px">
-          <input name="mfg_date[]"     type="date" title="Mfg date">
-          <input name="exp_date[]"     type="date" title="Expiry">
-          <input name="rate[]"         type="number" step="0.01" placeholder="Rate" style="width:75px">`;
-});
+  const currentYear = new Date().getFullYear();
+  const dMfg = new Date(); dMfg.setMonth(dMfg.getMonth() - 1);
+  const pad = n => String(n).padStart(2, '0');
+  const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const defaultMfg = fmtDate(dMfg);
+  const dExp = new Date(); dExp.setFullYear(dExp.getFullYear() + 1);
+  const defaultExp = fmtDate(dExp);
+  const batchNum = `B-${currentYear}-${Math.floor(100 + Math.random() * 900)}`;
+
+  return `
+    <div class="grn-item-card" style="background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;padding:12px 14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f1f5f9;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex:1">
+          <span style="background:#e0f2fe;color:#0369a1;font-weight:700;font-size:11px;padding:3px 8px;border-radius:4px">ITEM</span>
+          <input class="item-barcode" name="item_code[]" placeholder="Scan / Code" autocomplete="off" style="width:110px;font-weight:600">
+          <select name="item_id[]" style="flex:1"><option value="">— Select item —</option>${opts}</select>
+        </div>
+        <button type="button" class="btn-remove-row" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:4px;padding:2px 7px;font-size:12px;cursor:pointer;font-weight:700" title="Remove item">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:8px;margin-bottom:10px">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:#64748b;margin-bottom:3px">📋 Ordered Qty</label>
+          <input name="qty_ordered[]" type="number" min="0" placeholder="0" style="width:100%;background:#f1f5f9;font-weight:600;text-align:center">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#0284c7;margin-bottom:3px">📦 Received Qty</label>
+          <input name="qty_received[]" type="number" min="0" placeholder="0" required style="width:100%;font-weight:700;text-align:center;border-color:#38bdf8">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#16a34a;margin-bottom:3px">✅ Accepted (Stock)</label>
+          <input name="qty_accepted[]" type="number" min="0" placeholder="0" required style="width:100%;font-weight:700;text-align:center;border-color:#4ade80;background:#f0fdf4">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#dc2626;margin-bottom:3px">❌ Rejected / Damage</label>
+          <input name="qty_rejected[]" type="number" min="0" value="0" style="width:100%;font-weight:600;text-align:center">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr;gap:8px">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:#334155;margin-bottom:3px">🏷️ Batch Number</label>
+          <input name="batch[]" value="${batchNum}" placeholder="Batch No." required style="width:100%;font-weight:600">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:#64748b;margin-bottom:3px">📅 Mfg Date</label>
+          <input name="mfg_date[]" type="date" value="${defaultMfg}" style="width:100%">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#b45309;margin-bottom:3px">⏳ Expiry Date (FEFO)</label>
+          <input name="exp_date[]" type="date" value="${defaultExp}" required style="width:100%;font-weight:600;border-color:#fbbf24;background:#fffbeb">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:600;color:#334155;margin-bottom:3px">💰 Rate (PKR)</label>
+          <input name="rate[]" type="number" step="0.01" placeholder="0.00" style="width:100%">
+        </div>
+      </div>
+    </div>`;
+}, '＋ Add another item to GRN');
 
 // ── Requisition items ──────────────────────────────────────────────────────
 makeAddRowButton('req-items', () => {
@@ -235,7 +397,7 @@ function recalcPOTotal() {
     total += qty * rate + tax;
   });
   const lbl = qs('#po-total-label');
-  if (lbl) lbl.textContent = '₹ ' + total.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+  if (lbl) lbl.textContent = 'Rs. ' + total.toLocaleString('en-PK', { minimumFractionDigits: 2 });
 }
 const poItems = qs('#po-items');
 if (poItems) {
@@ -243,29 +405,270 @@ if (poItems) {
   // Inject total label
   const totalDiv = document.createElement('div');
   totalDiv.style.cssText = 'text-align:right;font-size:13px;font-weight:700;color:var(--ink);margin-top:8px;padding:6px 8px;background:#f8fafc;border-radius:6px;border:1px solid var(--line)';
-  totalDiv.innerHTML = 'Estimated total: <span id="po-total-label">₹ 0.00</span>';
+  totalDiv.innerHTML = 'Estimated total: <span id="po-total-label">Rs. 0.00</span>';
   poItems.insertAdjacentElement('afterend', totalDiv);
+  recalcPOTotal();
 }
 
-/* ── GRN: auto-fill supplier from selected PO ──────────────────────────── */
+/* ── GRN: PO Cards, Supplier Auto-Fill & Items Auto-Load ──────────── */
 const grnPoSel = qs('select[name="po_id"]');
 const grnSupSel = qs('form [name="supplier_id"]');
-if (grnPoSel && grnSupSel) {
+const grnItemsWrap = qs('#grn-items');
+const grnBanner = qs('#grn-po-banner');
+const grnBannerText = qs('#grn-po-banner-text');
+const btnDirectReceipt = qs('#btn-direct-receipt');
+const poCards = qsa('.po-inward-card');
+
+if (grnPoSel && grnItemsWrap) {
   // Store PO→supplier map from option text
-  const map = {};
+  const poSupplierMap = {};
   qsa('option', grnPoSel).forEach(o => {
     const m = o.textContent.match(/—\s*(.+)/);
-    if (m && o.value) map[o.value] = m[1].trim();
+    if (m && o.value) poSupplierMap[o.value] = m[1].trim();
   });
-  grnPoSel.addEventListener('change', () => {
-    const sup = map[grnPoSel.value];
-    if (sup) {
+
+  const pad = n => String(n).padStart(2, '0');
+  const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  function defaultMfgDate() {
+    const d = new Date(); d.setMonth(d.getMonth() - 1);
+    return fmtDate(d);
+  }
+  function defaultExpDate() {
+    const d = new Date(); d.setFullYear(d.getFullYear() + 1);
+    return fmtDate(d);
+  }
+
+  function getBlankGrnRowsHtml() {
+    const opts = poItemOptions();
+    const currentYear = new Date().getFullYear();
+    const defaultMfg = defaultMfgDate();
+    const defaultExp = defaultExpDate();
+    return Array.from({length: 2}, () => `
+      <div class="grn-item-card" style="background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;padding:12px 14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f1f5f9;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px;flex:1">
+            <span style="background:#e0f2fe;color:#0369a1;font-weight:700;font-size:11px;padding:3px 8px;border-radius:4px">ITEM</span>
+            <input class="item-barcode" name="item_code[]" placeholder="Scan / Code" autocomplete="off" style="width:110px;font-weight:600">
+            <select name="item_id[]" style="flex:1"><option value="">— Select item —</option>${opts}</select>
+          </div>
+          <button type="button" class="btn-remove-row" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:4px;padding:2px 7px;font-size:12px;cursor:pointer;font-weight:700" title="Remove item">✕</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:8px;margin-bottom:10px">
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:#64748b;margin-bottom:3px">📋 Ordered Qty</label>
+            <input name="qty_ordered[]" type="number" min="0" placeholder="0" style="width:100%;background:#f1f5f9;font-weight:600;text-align:center">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#0284c7;margin-bottom:3px">📦 Received Qty</label>
+            <input name="qty_received[]" type="number" min="0" placeholder="0" required style="width:100%;font-weight:700;text-align:center;border-color:#38bdf8">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#16a34a;margin-bottom:3px">✅ Accepted (Stock)</label>
+            <input name="qty_accepted[]" type="number" min="0" placeholder="0" required style="width:100%;font-weight:700;text-align:center;border-color:#4ade80;background:#f0fdf4">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#dc2626;margin-bottom:3px">❌ Rejected / Damage</label>
+            <input name="qty_rejected[]" type="number" min="0" value="0" style="width:100%;font-weight:600;text-align:center">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr;gap:8px">
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:#334155;margin-bottom:3px">🏷️ Batch Number</label>
+            <input name="batch[]" value="B-${currentYear}-${Math.floor(100 + Math.random() * 900)}" placeholder="Batch No." required style="width:100%;font-weight:600">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:#64748b;margin-bottom:3px">📅 Mfg Date</label>
+            <input name="mfg_date[]" type="date" value="${defaultMfg}" style="width:100%">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#b45309;margin-bottom:3px">⏳ Expiry Date (FEFO)</label>
+            <input name="exp_date[]" type="date" value="${defaultExp}" required style="width:100%;font-weight:600;border-color:#fbbf24;background:#fffbeb">
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:600;color:#334155;margin-bottom:3px">💰 Rate (PKR)</label>
+            <input name="rate[]" type="number" step="0.01" placeholder="0.00" style="width:100%">
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function updateGrnRowAccepted(card) {
+    const recvInp = qs('input[name="qty_received[]"]', card);
+    const rejInp = qs('input[name="qty_rejected[]"]', card);
+    const accInp = qs('input[name="qty_accepted[]"]', card);
+    if (!recvInp || !accInp) return;
+    const recv = parseInt(recvInp.value, 10) || 0;
+    const rej = parseInt(rejInp ? rejInp.value : 0, 10) || 0;
+    const acc = Math.max(0, recv - rej);
+    accInp.value = acc;
+    if (rejInp) {
+      rejInp.style.borderColor = rej > 0 ? '#ef4444' : '#dfe6f0';
+      rejInp.style.backgroundColor = rej > 0 ? '#fef2f2' : '#fff';
+    }
+  }
+
+  grnItemsWrap.addEventListener('input', e => {
+    if (e.target.matches('input[name="qty_received[]"]') || e.target.matches('input[name="qty_rejected[]"]')) {
+      const card = e.target.closest('.grn-item-card') || e.target.closest('.line-item-row');
+      if (card) updateGrnRowAccepted(card);
+    }
+  });
+
+  grnItemsWrap.addEventListener('click', e => {
+    if (e.target.matches('.btn-remove-row') || e.target.closest('.btn-remove-row')) {
+      const card = e.target.closest('.grn-item-card') || e.target.closest('.line-item-row');
+      if (card) {
+        if (qsa('.grn-item-card, .line-item-row', grnItemsWrap).length > 1) {
+          card.remove();
+        } else {
+          alert('At least one item is required in the GRN.');
+        }
+      }
+    }
+  });
+
+  function selectPOForGRN(poId, scrollToForm = false) {
+    grnPoSel.value = poId || '';
+
+    // 1. Sync cards visually
+    poCards.forEach(card => {
+      const isCardSelected = String(card.dataset.poId) === String(poId);
+      card.classList.toggle('is-selected', isCardSelected);
+      card.style.background = isCardSelected ? '#eff6ff' : '#fff';
+      card.style.borderColor = isCardSelected ? '#2563eb' : '#e2e8f0';
+      card.style.boxShadow = isCardSelected ? '0 4px 12px rgba(37,99,235,0.18)' : 'none';
+      const btn = qs('.btn-select-po', card);
+      if (btn) {
+        btn.textContent = isCardSelected ? '✓ Selected for GRN' : '📦 Receive This PO';
+        btn.className = `button ${isCardSelected ? 'button-primary' : 'button-light'} btn-select-po`;
+      }
+    });
+
+    // 2. Auto-select supplier
+    if (grnSupSel && poId && poSupplierMap[poId]) {
+      const sup = poSupplierMap[poId];
       qsa('option', grnSupSel).forEach(o => {
         o.selected = o.textContent.trim() === sup;
       });
     }
+
+    // 3. Populate items from window.SIOVS_PO_ITEMS
+    const poItems = window.SIOVS_PO_ITEMS && window.SIOVS_PO_ITEMS[poId];
+    if (poId && poItems && poItems.length > 0) {
+      grnItemsWrap.innerHTML = '';
+      if (grnBanner && grnBannerText) {
+        const poText = grnPoSel.options[grnPoSel.selectedIndex]?.textContent || `PO #${poId}`;
+        grnBannerText.innerHTML = `<strong>Receiving delivery for ${escHtml(poText.split('—')[0].trim())}</strong>. ${poItems.length} item(s) auto-loaded. Please inspect physical boxes and verify batch numbers &amp; expiry dates.`;
+        grnBanner.style.display = 'flex';
+      }
+
+      const defaultMfg = defaultMfgDate();
+      const defaultExp = defaultExpDate();
+      const currentYear = new Date().getFullYear();
+
+      poItems.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'grn-item-card';
+        card.style.cssText = 'background:#ffffff;border:1px solid #cbd5e1;border-radius:8px;padding:12px 14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.04)';
+        const batchNum = `B-${currentYear}-${Math.floor(100 + Math.random() * 900)}`;
+        card.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f1f5f9;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px;flex:1">
+              <span style="background:#e0f2fe;color:#0369a1;font-weight:700;font-size:11px;padding:3px 8px;border-radius:4px">ITEM</span>
+              <input class="item-barcode" name="item_code[]" value="${escHtml(item.code)}" readonly style="width:110px;background:#f8fafc;font-weight:700" placeholder="Code">
+              <select name="item_id[]" style="flex:1;background:#f8fafc;pointer-events:none">
+                <option value="${item.item_id}" selected>${escHtml(item.code)} — ${escHtml(item.name)} (${escHtml(item.unit || item.item_unit || 'Units')})</option>
+              </select>
+            </div>
+            <button type="button" class="btn-remove-row" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:4px;padding:2px 7px;font-size:12px;cursor:pointer;font-weight:700" title="Remove item">✕</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:8px;margin-bottom:10px">
+            <div>
+              <label style="display:block;font-size:11px;font-weight:600;color:#64748b;margin-bottom:3px">📋 Ordered Qty</label>
+              <input name="qty_ordered[]" type="number" min="0" value="${item.quantity_ordered}" readonly style="width:100%;background:#f1f5f9;font-weight:600;text-align:center">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:700;color:#0284c7;margin-bottom:3px">📦 Received Qty</label>
+              <input name="qty_received[]" type="number" min="0" value="${item.quantity_ordered}" required style="width:100%;font-weight:700;text-align:center;border-color:#38bdf8">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:700;color:#16a34a;margin-bottom:3px">✅ Accepted (Stock)</label>
+              <input name="qty_accepted[]" type="number" min="0" value="${item.quantity_ordered}" required style="width:100%;font-weight:700;text-align:center;border-color:#4ade80;background:#f0fdf4">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:700;color:#dc2626;margin-bottom:3px">❌ Rejected / Damage</label>
+              <input name="qty_rejected[]" type="number" min="0" value="0" style="width:100%;font-weight:600;text-align:center">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr;gap:8px">
+            <div>
+              <label style="display:block;font-size:11px;font-weight:600;color:#334155;margin-bottom:3px">🏷️ Batch Number</label>
+              <input name="batch[]" value="${batchNum}" placeholder="Batch No." required style="width:100%;font-weight:600">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:600;color:#64748b;margin-bottom:3px">📅 Mfg Date</label>
+              <input name="mfg_date[]" type="date" value="${defaultMfg}" style="width:100%">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:700;color:#b45309;margin-bottom:3px">⏳ Expiry Date (FEFO)</label>
+              <input name="exp_date[]" type="date" value="${defaultExp}" required style="width:100%;font-weight:600;border-color:#fbbf24;background:#fffbeb">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;font-weight:600;color:#334155;margin-bottom:3px">💰 Rate (PKR)</label>
+              <input name="rate[]" type="number" step="0.01" value="${item.rate}" placeholder="Rate" style="width:100%">
+            </div>
+          </div>
+        `;
+        grnItemsWrap.appendChild(card);
+      });
+    } else {
+      if (grnBanner) {
+        if (poId) {
+          grnBannerText.innerHTML = `<strong>Notice:</strong> Selected PO has no item lines recorded. Please add items manually below.`;
+          grnBanner.style.display = 'flex';
+        } else {
+          grnBanner.style.display = 'none';
+        }
+      }
+      grnItemsWrap.innerHTML = getBlankGrnRowsHtml();
+    }
+
+    if (scrollToForm) {
+      const addGrnCard = qs('#add-grn');
+      if (addGrnCard) {
+        if (window.openDrawer) {
+          window.openDrawer(addGrnCard);
+        } else {
+          addGrnCard.scrollIntoView({ behavior: 'smooth' });
+        }
+        const challanInput = qs('#grn-challan-number');
+        if (challanInput) setTimeout(() => challanInput.focus(), 320);
+      }
+    }
+  }
+
+  // Card click event listeners
+  poCards.forEach(card => {
+    card.addEventListener('click', () => {
+      selectPOForGRN(card.dataset.poId, true);
+    });
+  });
+
+  // Direct receipt button listener
+  if (btnDirectReceipt) {
+    btnDirectReceipt.addEventListener('click', () => {
+      selectPOForGRN('', true);
+    });
+  }
+
+  // Dropdown change listener
+  grnPoSel.addEventListener('change', () => {
+    selectPOForGRN(grnPoSel.value, false);
   });
 }
+
 
 /* ── Confirm dialogs for approve / issue buttons ────────────────────────── */
 qsa('form button[type="submit"]').forEach(btn => {
@@ -313,10 +716,32 @@ document.addEventListener('change', e => {
     e.target.style.borderColor = days <= 0 ? '#c5293e' : days <= 90 ? '#f59e0b' : '#22c55e';
   }
   if (e.target.matches('select[name="item_id[]"]')) {
+    const row = e.target.closest('.line-item-row');
+    const opt = e.target.selectedOptions[0];
+
     const expiry = window.SIOVS_EXPIRY?.[e.target.value];
     if (expiry && expiry < new Date().toISOString().slice(0, 10)) {
-      alert(`EXPIRED ITEM\n${e.target.selectedOptions[0].textContent.trim()}\nExpiry date: ${expiry}\nThis item cannot be issued.`);
+      alert(`EXPIRED ITEM\n${opt ? opt.textContent.trim() : ''}\nExpiry date: ${expiry}\nThis item cannot be issued.`);
       e.target.value = '';
+      if (row) {
+        const codeInp = qs('.item-barcode', row);
+        if (codeInp) codeInp.value = '';
+        const unitInp = qs('[name="unit[]"]', row);
+        if (unitInp) unitInp.value = '';
+      }
+      return;
+    }
+
+    // Auto-sync Item Code and Unit into inputs when selecting from dropdown
+    if (row) {
+      const codeInp = qs('.item-barcode', row);
+      if (codeInp) {
+        codeInp.value = (opt && opt.value) ? (opt.dataset.code || opt.textContent.split('—')[0].trim() || '') : '';
+      }
+      const unitInp = qs('[name="unit[]"]', row);
+      if (unitInp) {
+        unitInp.value = (opt && opt.value) ? (opt.dataset.unit || '') : '';
+      }
     }
   }
 });
