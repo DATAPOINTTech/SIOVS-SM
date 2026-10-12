@@ -97,11 +97,11 @@ tr:has(.pill.danger) td:first-child, tr:has(.pill.attention) td:first-child { bo
 /* ── Hero expanded: logo + title + greeting in one banner ─────────────── */
 .hero-expanded {
   height: auto !important;
-  min-height: 220px;
+  min-height: 140px;
   display: flex !important;
   align-items: center;
   gap: 0;
-  padding: 20px 36px !important;
+  padding: 22px 32px !important;
 }
 
 /* Left: logo + name block */

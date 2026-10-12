@@ -304,19 +304,13 @@ require __DIR__ . '/partials/header.php';
 
     <!-- ── Hero Banner ─────────────────────────────────────────────── -->
     <div class="hero hero-expanded" style="background:linear-gradient(135deg, #064e3b 0%, #065f46 45%, #047857 100%)">
-        <div class="hero-brand">
-            <img src="https://siovs.edu.pk/wp-content/uploads/2022/09/logo-main.png"
-                 alt="SIOVS logo" class="hero-logo">
-            <div class="hero-system-name">
-                <span class="hero-siovs">SIOVS</span>
-                <span class="hero-full-title">DEPARTMENT OF PROCUREMENT<br>&amp; SUPPLY CHAIN MANAGEMENT</span>
-            </div>
-        </div>
-        <div class="hero-divider"></div>
         <div class="hero-right">
-            <p class="eyebrow" id="hero-date"><?= strtoupper(date('l, j F Y')) ?></p>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+                <p class="eyebrow" id="hero-date" style="margin:0"><?= strtoupper(date('l, j F Y')) ?></p>
+                <span style="background:rgba(255,255,255,0.18);color:#e8f37c;font-size:11px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:12px;text-transform:uppercase">Department of Procurement &amp; Supply Chain</span>
+            </div>
             <h1 class="hero-greeting">Procurement Command Center</h1>
-            <p class="hero-copy" style="font-size:13px;max-width:580px;line-height:1.45">
+            <p class="hero-copy" style="font-size:13px;max-width:720px;line-height:1.45">
                 Logged in as <b><?= e($u['name'] ?? 'Purchase Officer') ?></b>. Manage vendor orders, track delivery pipelines, and monitor Store replenishment triggers.
                 <span id="live-clock" style="font-weight:700;color:#e8f37c;font-size:14px;margin-left:8px"></span>
             </p>
@@ -790,19 +784,13 @@ require __DIR__ . '/partials/header.php';
 
     <!-- ── Hero Banner ─────────────────────────────────────────────── -->
     <div class="hero hero-expanded" style="background:linear-gradient(135deg, #064e3b 0%, #047857 50%, #059669 100%)">
-        <div class="hero-brand">
-            <img src="https://siovs.edu.pk/wp-content/uploads/2022/09/logo-main.png"
-                 alt="SIOVS logo" class="hero-logo">
-            <div class="hero-system-name">
-                <span class="hero-siovs">SIOVS</span>
-                <span class="hero-full-title">CENTRAL STORE &amp; INVENTORY<br>MANAGEMENT SECTION</span>
-            </div>
-        </div>
-        <div class="hero-divider"></div>
         <div class="hero-right">
-            <p class="eyebrow" id="hero-date"><?= strtoupper(date('l, j F Y')) ?></p>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+                <p class="eyebrow" id="hero-date" style="margin:0"><?= strtoupper(date('l, j F Y')) ?></p>
+                <span style="background:rgba(255,255,255,0.18);color:#e8f37c;font-size:11px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:12px;text-transform:uppercase">Central Store &amp; Inventory Management Section</span>
+            </div>
             <h1 class="hero-greeting">Store Operations Command Center</h1>
-            <p class="hero-copy" style="font-size:13px;max-width:620px;line-height:1.45">
+            <p class="hero-copy" style="font-size:13px;max-width:720px;line-height:1.45">
                 Logged in as <b><?= e($u['name'] ?? 'Store Officer') ?></b>. Central Store custody, physical receipt inspection (GRN), FEFO department issuance, and batch lifecycle tracking.
                 <span id="live-clock" style="font-weight:700;color:#e8f37c;font-size:14px;margin-left:8px"></span>
             </p>
@@ -1133,19 +1121,13 @@ require __DIR__ . '/partials/header.php';
 
     <!-- ── Hero Banner ─────────────────────────────────────────────── -->
     <div class="hero hero-expanded" style="background:linear-gradient(135deg, #0f172a 0%, #0f766e 50%, #115e59 100%)">
-        <div class="hero-brand">
-            <img src="https://siovs.edu.pk/wp-content/uploads/2022/09/logo-main.png"
-                 alt="SIOVS logo" class="hero-logo">
-            <div class="hero-system-name">
-                <span class="hero-siovs">SIOVS</span>
-                <span class="hero-full-title">DEPARTMENT OF FINANCE &amp;<br>INTERNAL AUDIT CONTROL</span>
-            </div>
-        </div>
-        <div class="hero-divider"></div>
         <div class="hero-right">
-            <p class="eyebrow" id="hero-date"><?= strtoupper(date('l, j F Y')) ?></p>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+                <p class="eyebrow" id="hero-date" style="margin:0"><?= strtoupper(date('l, j F Y')) ?></p>
+                <span style="background:rgba(255,255,255,0.18);color:#5eead4;font-size:11px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:12px;text-transform:uppercase">DEPARTMENT OF FINANCE &amp;<br>INTERNAL AUDIT CONTROL</span>
+            </div>
             <h1 class="hero-greeting">Finance &amp; Audit Command Center</h1>
-            <p class="hero-copy" style="font-size:13px;max-width:620px;line-height:1.45">
+            <p class="hero-copy" style="font-size:13px;max-width:720px;line-height:1.45">
                 Logged in as <b><?= e($u['name'] ?? 'Deputy Director Finance') ?></b>. Financial authorizations, stock write-offs, deletion request audits, capital asset oversight, and statutory compliance.
                 <span id="live-clock" style="font-weight:700;color:#5eead4;font-size:14px;margin-left:8px"></span>
             </p>
@@ -1287,19 +1269,7 @@ require __DIR__ . '/partials/header.php';
                             <small class="muted">By: <?= e($adj['requester_name'] ?? 'Store Staff') ?></small>
                         </td>
                         <td style="text-align:right">
-                            <div style="display:inline-flex;gap:4px;justify-content:flex-end">
-                                <form method="post" style="display:inline;margin:0">
-                                    <input type="hidden" name="action" value="approve_adjustment">
-                                    <input type="hidden" name="adj_id" value="<?= $adj['id'] ?>">
-                                    <button class="button button-primary" type="submit" style="padding:4px 8px;font-size:11px;background:#047857;border-color:#065f46" onclick="return confirm('Authorize adjustment <?= e($adj['adj_number']) ?> and update stock ledger?')">✓ Approve</button>
-                                </form>
-                                <form method="post" style="display:inline;margin:0" onsubmit="var r = prompt('Reason for rejecting adjustment:'); if(!r) return false; this.rejection_reason.value = r; return true;">
-                                    <input type="hidden" name="action" value="reject_adjustment">
-                                    <input type="hidden" name="adj_id" value="<?= $adj['id'] ?>">
-                                    <input type="hidden" name="rejection_reason" value="">
-                                    <button class="button button-light" type="submit" style="padding:4px 8px;font-size:11px;color:#b91c1c;border-color:#fecaca">✕ Reject</button>
-                                </form>
-                            </div>
+                            <a href="page.php?view=adjustments" class="button button-primary" style="padding:4px 10px;font-size:11px;background:#0d9488;border-color:#0f766e;text-decoration:none" title="Review and authorize on Stock Adjustments register">Review →</a>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -1411,15 +1381,6 @@ require __DIR__ . '/partials/header.php';
 <?php else: ?>
     <!-- ── Hero banner ───────────────────────────────────────────────── -->
     <div class="hero hero-expanded">
-        <div class="hero-brand">
-            <img src="https://siovs.edu.pk/wp-content/uploads/2022/09/logo-main.png"
-                 alt="SIOVS logo" class="hero-logo">
-            <div class="hero-system-name">
-                <span class="hero-siovs">SIOVS</span>
-                <span class="hero-full-title">STORE, INVENTORY &amp;<br>ASSET MANAGEMENT<br>SYSTEM</span>
-            </div>
-        </div>
-        <div class="hero-divider"></div>
         <div class="hero-right">
             <p class="eyebrow" id="hero-date"><?= strtoupper(date('l, j F Y')) ?></p>
             <h1 class="hero-greeting" id="hero-greeting">Good day, <?= e($firstName) ?></h1>
