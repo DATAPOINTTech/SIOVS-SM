@@ -10,6 +10,7 @@ $u = current_user();
 $isPurchaseOfficer = (($u['role'] ?? '') === 'purchase_officer');
 $isStoreOfficer    = (($u['role'] ?? '') === 'store_officer');
 $isDDFinance       = (($u['role'] ?? '') === 'dd_finance');
+$isDeptIncharge    = (($u['role'] ?? '') === 'dept_incharge');
 $today = date('Y-m-d');
 
 if ($isPurchaseOfficer) {
@@ -197,6 +198,84 @@ if ($isPurchaseOfficer) {
         ORDER BY v.id DESC
         LIMIT 5
     ')->fetchAll(PDO::FETCH_ASSOC);
+} elseif ($isDeptIncharge) {
+    // ── Clinical & Sub-Store Specific Metrics (Section 8 & Clinical SOPs) ──
+    $userDeptStmt = $pdo->prepare('SELECT * FROM departments WHERE incharge = ? OR incharge LIKE ? LIMIT 1');
+    $userDeptStmt->execute([$u['name'] ?? '', '%' . ($u['name'] ?? '') . '%']);
+    $deptInfo = $userDeptStmt->fetch(PDO::FETCH_ASSOC);
+    $deptId   = $deptInfo['id'] ?? null;
+    $deptName = $deptInfo['name'] ?? 'Department Sub-Store';
+    $deptType = $deptInfo['type'] ?? 'Emergency';
+
+    // Sub-Store inventory stats
+    $subStoreItemCount = (int)$pdo->query(
+        "SELECT COUNT(DISTINCT item_id) FROM department_stock WHERE " . ($deptId ? "department_id = {$deptId} AND " : "") . "quantity > 0"
+    )->fetchColumn();
+
+    $subStoreTotalUnits = (int)$pdo->query(
+        "SELECT COALESCE(SUM(quantity),0) FROM department_stock WHERE " . ($deptId ? "department_id = {$deptId} AND " : "") . "quantity > 0"
+    )->fetchColumn();
+
+    // Requisitions stats
+    $deptPendingReqCount = (int)$pdo->query(
+        "SELECT COUNT(*) FROM requisitions WHERE " . ($deptId ? "department_id = {$deptId} AND " : "") . "status IN ('Draft','Approved')"
+    )->fetchColumn();
+
+    $deptIssuedReqCount = (int)$pdo->query(
+        "SELECT COUNT(*) FROM requisitions WHERE " . ($deptId ? "department_id = {$deptId} AND " : "") . "status = 'Issued'"
+    )->fetchColumn();
+
+    // Today's dispensing
+    $todayDispensingCount = (int)$pdo->query(
+        "SELECT COUNT(*) FROM consumption_records WHERE " . ($deptId ? "department_id = {$deptId} AND " : "") . "date(created_at) = '{$today}'"
+    )->fetchColumn();
+
+    $todayDispensedUnits = (int)$pdo->query(
+        "SELECT COALESCE(SUM(quantity),0) FROM consumption_records WHERE " . ($deptId ? "department_id = {$deptId} AND " : "") . "date(created_at) = '{$today}'"
+    )->fetchColumn();
+
+    // Expiring sub-store batches within 30 days
+    $subStoreExpiringCount = (int)$pdo->query(
+        "SELECT COUNT(*) FROM department_stock WHERE " . ($deptId ? "department_id = {$deptId} AND " : "") . "quantity > 0 AND expiry_date IS NOT NULL AND expiry_date >= '{$today}' AND expiry_date <= date('{$today}','+30 days')"
+    )->fetchColumn();
+
+    // Department Sub-Store Stock list
+    $deptStockQuery = "
+        SELECT ds.*, i.name AS item_name, i.code AS item_code, i.unit, d.name AS dept_name
+        FROM department_stock ds
+        JOIN items i ON i.id = ds.item_id
+        JOIN departments d ON d.id = ds.department_id
+        WHERE ds.quantity > 0 " . ($deptId ? "AND ds.department_id = {$deptId} " : "") . "
+        ORDER BY ds.expiry_date ASC, i.name ASC
+        LIMIT 10
+    ";
+    $deptStockList = $pdo->query($deptStockQuery)->fetchAll(PDO::FETCH_ASSOC);
+
+    // Recent Department Requisitions
+    $deptReqQuery = "
+        SELECT r.*, d.name AS dept_name,
+               (SELECT COUNT(*) FROM requisition_items ri WHERE ri.req_id = r.id) AS item_count,
+               (SELECT COALESCE(SUM(ri.required_quantity),0) FROM requisition_items ri WHERE ri.req_id = r.id) AS total_qty_requested,
+               (SELECT COALESCE(SUM(ri.issued_quantity),0) FROM requisition_items ri WHERE ri.req_id = r.id) AS total_qty_issued
+        FROM requisitions r
+        LEFT JOIN departments d ON d.id = r.department_id
+        " . ($deptId ? "WHERE r.department_id = {$deptId} " : "") . "
+        ORDER BY r.id DESC
+        LIMIT 6
+    ";
+    $deptRecentReqs = $pdo->query($deptReqQuery)->fetchAll(PDO::FETCH_ASSOC);
+
+    // Recent Patient Dispensing Records
+    $deptDispQuery = "
+        SELECT c.*, i.name AS item_name, i.code AS item_code, i.unit, d.name AS dept_name
+        FROM consumption_records c
+        LEFT JOIN items i ON i.id = c.item_id
+        LEFT JOIN departments d ON d.id = c.department_id
+        " . ($deptId ? "WHERE c.department_id = {$deptId} " : "") . "
+        ORDER BY c.id DESC
+        LIMIT 6
+    ";
+    $deptRecentDispensing = $pdo->query($deptDispQuery)->fetchAll(PDO::FETCH_ASSOC);
 } else {
     // Inventory KPIs
     $totalItems   = (int) $pdo->query('SELECT COUNT(*) FROM items')->fetchColumn();
@@ -286,13 +365,16 @@ if ($isPurchaseOfficer) {
     if ($pendingAdj > 0)       $pendingActions[] = ['label' => "{$pendingAdj} stock adjustment" . ($pendingAdj > 1 ? 's' : '') . ' awaiting financial authorization', 'link' => page_link('adjustments'), 'perm' => 'adjustments'];
     if ($pendingDeletions > 0) $pendingActions[] = ['label' => "{$pendingDeletions} deletion request" . ($pendingDeletions > 1 ? 's' : '') . ' pending audit authorization', 'link' => page_link('deletions'), 'perm' => 'deletions'];
     if ($pendingVer > 0)       $pendingActions[] = ['label' => "{$pendingVer} physical audit" . ($pendingVer > 1 ? 's' : '') . ' submitted for review', 'link' => page_link('verification'), 'perm' => 'verification'];
+} elseif ($isDeptIncharge) {
+    if ($deptPendingReqCount > 0)    $pendingActions[] = ['label' => "{$deptPendingReqCount} department requisition" . ($deptPendingReqCount > 1 ? 's' : '') . ' awaiting Central Store issue', 'link' => page_link('requisitions'), 'perm' => 'requisitions'];
+    if ($subStoreExpiringCount > 0)  $pendingActions[] = ['label' => "{$subStoreExpiringCount} sub-store item" . ($subStoreExpiringCount > 1 ? 's' : '') . ' expiring in 30 days · Review for dispensing or return', 'link' => page_link('returns'), 'perm' => 'returns'];
 } else {
     if ($pendingGRNs > 0) $pendingActions[] = ['label' => "{$pendingGRNs} GRN" . ($pendingGRNs > 1 ? 's' : '') . ' pending inspection',         'link' => page_link('grn'),          'perm' => 'grn'];
     if ($pendingReqs > 0) $pendingActions[] = ['label' => "{$pendingReqs} requisition" . ($pendingReqs > 1 ? 's' : '') . ' awaiting action',     'link' => page_link('requisitions'), 'perm' => 'requisitions'];
     if ($pendingAdj  > 0) $pendingActions[] = ['label' => "{$pendingAdj} stock adjustment" . ($pendingAdj > 1 ? 's' : '') . ' pending approval', 'link' => page_link('adjustments'),  'perm' => 'adjustments'];
 }
 $current = 'dashboard';
-$title   = $isPurchaseOfficer ? 'Procurement Dashboard' : ($isStoreOfficer ? 'Store Operations Dashboard' : ($isDDFinance ? 'Finance Command Center' : 'Dashboard'));
+$title   = $isPurchaseOfficer ? 'Procurement Dashboard' : ($isStoreOfficer ? 'Store Operations Dashboard' : ($isDDFinance ? 'Finance Command Center' : ($isDeptIncharge ? 'Clinical & Department Sub-Store Command Center' : 'Dashboard')));
 require __DIR__ . '/partials/header.php';
 ?>
 <section class="page-content" id="dashboard">
@@ -1375,6 +1457,345 @@ require __DIR__ . '/partials/header.php';
                     <?php endif; ?>
                 </div>
             </section>
+        </div>
+    </div>
+
+<?php elseif ($isDeptIncharge): ?>
+    <!-- ═════════════════════════════════════════════════════════════════
+         CLINICAL & DEPARTMENT SUB-STORE COMMAND CENTER
+         (DEPARTMENT INCHARGE DASHBOARD)
+         Conforms to SIOVS Requirements Section 8 & Clinical SOPs
+         ═════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Hero Banner ─────────────────────────────────────────────── -->
+    <div class="hero hero-expanded" style="background:linear-gradient(135deg, #065f46 0%, #0d9488 50%, #059669 100%)">
+        <div class="hero-right">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+                <p class="eyebrow" id="hero-date" style="margin:0"><?= strtoupper(date('l, j F Y')) ?></p>
+                <span style="background:rgba(255,255,255,0.18);color:#e8f37c;font-size:11px;font-weight:700;letter-spacing:1px;padding:3px 10px;border-radius:12px;text-transform:uppercase">
+                    <?= e($deptName) ?> (Sub-Store #<?= (int)($deptId ?? 0) ?>)
+                </span>
+            </div>
+            <h1 class="hero-greeting">Clinical Operations &amp; Sub-Store Command Center</h1>
+            <p class="hero-copy" style="font-size:13px;max-width:750px;line-height:1.45">
+                Logged in as <b><?= e($u['name'] ?? 'Dept. Incharge') ?></b> (Incharge · <?= e($deptName) ?>). Manage department floor inventory, indent medical supplies from Central Store, dispense point-of-care treatments, and return surplus or damaged stock.
+                <span id="live-clock" style="font-weight:700;color:#e8f37c;font-size:14px;margin-left:8px"></span>
+            </p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+                <a href="page.php?view=requisitions#add-req" class="button" style="background:#10b981;color:#fff;border:none;font-size:12px;padding:6px 14px;border-radius:6px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px">＋ Indent from Central Store</a>
+                <a href="page.php?view=<?= $deptType === 'OT' ? 'ot_consumption' : ($deptType === 'OPD' ? 'opd_consumption' : ($deptType === 'IPD' ? 'ipd_consumption' : 'emergency')) ?>" class="button button-light" style="font-size:12px;padding:6px 14px;border-radius:6px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px">✚ Patient Dispensing</a>
+                <a href="page.php?view=returns#add-return" class="button button-light" style="font-size:12px;padding:6px 14px;border-radius:6px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px">↻ Return Stock to Store</a>
+                <a href="page.php?view=reports&rtype=consumption" class="button button-light" style="font-size:12px;padding:6px 14px;border-radius:6px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:6px">▥ Consumption Reports</a>
+            </div>
+        </div>
+        <div class="hero-decoration"><span></span><span></span><span></span></div>
+    </div>
+
+    <!-- ── Regulatory Compliance & Segregation of Duties Banner ─────── -->
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:4px solid #16a34a;border-radius:8px;padding:12px 16px;margin:1rem 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:24px">🏥</span>
+            <div style="font-size:12px;color:#166534;line-height:1.45">
+                <strong style="font-size:13px;display:block;margin-bottom:2px">SIOVS Hospital Clinical Operations &amp; Segregation of Duties:</strong>
+                Department Sub-Stores maintain local floor stock strictly for direct patient care and surgical procedures.
+                Central Store replenishes sub-stores against approved Indent Requisitions. Clinical in-charges are restricted from receiving vendor consignments (GRN), raising purchase orders, or making warehouse adjustments.
+            </div>
+        </div>
+        <span style="font-size:11px;font-weight:700;background:#dcfce7;color:#15803d;padding:4px 10px;border-radius:6px;white-space:nowrap;border:1px solid #86efac">
+            ✓ Clinical Care Compliant
+        </span>
+    </div>
+
+    <!-- ── KPI Row 1: Sub-Store Inventory & Operational Throughput ─── -->
+    <div class="section-heading">
+        <div><p class="eyebrow">DEPARTMENT OVERVIEW</p><h2>Sub-Store Inventory &amp; Patient Dispensing</h2></div>
+        <a href="#floor-stock" class="text-button" style="font-size:12px">Jump to Floor Stock Register ↓</a>
+    </div>
+    <div class="metric-grid four-col" style="grid-template-columns:repeat(4, 1fr);gap:14px;margin-bottom:1.25rem">
+        <!-- Card 1: Sub-Store Items Held -->
+        <article class="metric-card kpi-card" data-link="#floor-stock" style="background:linear-gradient(135deg, #047857 0%, #059669 55%, #10b981 100%);box-shadow:0 10px 28px rgba(5,150,105,.35);cursor:pointer;--delay:0">
+            <div class="kpi-illustration" aria-hidden="true">
+                <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="25" y="30" width="110" height="70" rx="8" fill="white" opacity=".2"/>
+                    <rect x="35" y="45" width="25" height="40" rx="4" fill="white" opacity=".4"/>
+                    <rect x="68" y="45" width="25" height="40" rx="4" fill="white" opacity=".4"/>
+                    <rect x="101" y="45" width="25" height="40" rx="4" fill="white" opacity=".4"/>
+                    <line x1="25" y1="90" x2="135" y2="90" stroke="white" stroke-width="3" opacity=".5"/>
+                </svg>
+            </div>
+            <div class="kpi-body">
+                <div class="metric-top">
+                    <span class="kpi-label">Sub-Store Items</span>
+                    <span class="trend up">Active on Floor</span>
+                </div>
+                <div class="metric-value-row">
+                    <span class="metric-num"><?= $subStoreItemCount ?></span>
+                    <span class="metric-unit">varieties</span>
+                </div>
+                <div class="metric-sub">Medicines &amp; consumables in custody</div>
+            </div>
+        </article>
+
+        <!-- Card 2: Physical Units on Hand -->
+        <article class="metric-card kpi-card" data-link="#floor-stock" style="background:linear-gradient(135deg, #0d9488 0%, #0f766e 55%, #115e59 100%);box-shadow:0 10px 28px rgba(13,148,136,.35);cursor:pointer;--delay:1">
+            <div class="kpi-illustration" aria-hidden="true">
+                <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="80" cy="60" r="38" stroke="white" stroke-width="6" opacity=".25"/>
+                    <path d="M80 35 V60 H105" stroke="white" stroke-width="5" stroke-linecap="round" opacity=".6"/>
+                </svg>
+            </div>
+            <div class="kpi-body">
+                <div class="metric-top">
+                    <span class="kpi-label">Floor Stock Balance</span>
+                    <?php if ($subStoreExpiringCount > 0): ?>
+                    <span class="trend down" style="background:rgba(239,68,68,0.25);color:#fca5a5">⚠️ <?= $subStoreExpiringCount ?> Expiring</span>
+                    <?php else: ?>
+                    <span class="trend up">Sufficient</span>
+                    <?php endif; ?>
+                </div>
+                <div class="metric-value-row">
+                    <span class="metric-num"><?= number_format($subStoreTotalUnits) ?></span>
+                    <span class="metric-unit">units</span>
+                </div>
+                <div class="metric-sub">Physical shelf units available</div>
+            </div>
+        </article>
+
+        <!-- Card 3: Department Indents & Requisitions -->
+        <article class="metric-card kpi-card" data-link="page.php?view=requisitions" style="background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 55%, #1e40af 100%);box-shadow:0 10px 28px rgba(37,99,235,.35);cursor:pointer;--delay:2">
+            <div class="kpi-illustration" aria-hidden="true">
+                <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="35" y="25" width="90" height="75" rx="6" stroke="white" stroke-width="3" opacity=".3"/>
+                    <line x1="50" y1="45" x2="110" y2="45" stroke="white" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+                    <line x1="50" y1="60" x2="95" y2="60" stroke="white" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+                    <line x1="50" y1="75" x2="105" y2="75" stroke="white" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+                </svg>
+            </div>
+            <div class="kpi-body">
+                <div class="metric-top">
+                    <span class="kpi-label">Active Indents / Reqs</span>
+                    <span class="trend up"><?= $deptIssuedReqCount ?> Issued</span>
+                </div>
+                <div class="metric-value-row">
+                    <span class="metric-num"><?= $deptPendingReqCount ?></span>
+                    <span class="metric-unit">pending</span>
+                </div>
+                <div class="metric-sub">Awaiting Central Store dispatch</div>
+            </div>
+        </article>
+
+        <!-- Card 4: Patient Dispensing Today -->
+        <article class="metric-card kpi-card" data-link="page.php?view=<?= $deptType === 'OT' ? 'ot_consumption' : ($deptType === 'OPD' ? 'opd_consumption' : ($deptType === 'IPD' ? 'ipd_consumption' : 'emergency')) ?>" style="background:linear-gradient(135deg, #7c3aed 0%, #6d28d9 55%, #5b21b6 100%);box-shadow:0 10px 28px rgba(124,58,237,.35);cursor:pointer;--delay:3">
+            <div class="kpi-illustration" aria-hidden="true">
+                <svg viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="80" cy="60" r="35" fill="white" opacity=".15"/>
+                    <path d="M80 40 V80 M60 60 H100" stroke="white" stroke-width="6" stroke-linecap="round" opacity=".7"/>
+                </svg>
+            </div>
+            <div class="kpi-body">
+                <div class="metric-top">
+                    <span class="kpi-label">Today's Dispensing</span>
+                    <span class="trend up"><?= $todayDispensedUnits ?> Units</span>
+                </div>
+                <div class="metric-value-row">
+                    <span class="metric-num"><?= $todayDispensingCount ?></span>
+                    <span class="metric-unit">episodes</span>
+                </div>
+                <div class="metric-sub">Patient administrations recorded today</div>
+            </div>
+        </article>
+    </div>
+
+    <!-- ── Main Grid: Department Floor Stock & Indents ────────────── -->
+    <div class="system-grid two-one" style="gap:1.5rem;align-items:start;margin-bottom:1.5rem">
+        <!-- Panel 1: Department Sub-Store Floor Stock -->
+        <div class="panel" id="floor-stock">
+            <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <h2 style="font-size:15px;margin:0">Floor Stock Register · <?= e($deptName) ?></h2>
+                    <small class="muted">Live inventory physically held in this department sub-store</small>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <a class="button button-primary" href="page.php?view=requisitions#add-req" style="font-size:12px;padding:6px 12px">＋ Indent from Store</a>
+                    <a class="button button-light" href="page.php?view=returns#add-return" style="font-size:12px;padding:6px 12px">↻ Return Stock</a>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <?php if (empty($deptStockList)): ?>
+                <div class="empty-state" style="padding:2.5rem 1rem;text-align:center">
+                    <span class="empty-icon" style="font-size:32px">📦</span>
+                    <p style="font-weight:600;margin:8px 0 4px">No stock items currently held in this department sub-store.</p>
+                    <small class="muted">Raise an indent requisition above to pull inventory from the Central Store.</small>
+                </div>
+                <?php else: ?>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item Code &amp; Name</th>
+                            <th>Batch No.</th>
+                            <th>Expiry Date</th>
+                            <th>Available Qty</th>
+                            <th>Unit</th>
+                            <th style="text-align:right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($deptStockList as $stk): ?>
+                    <?php
+                    $isNearExpiry = (!empty($stk['expiry_date']) && $stk['expiry_date'] <= date('Y-m-d', strtotime('+30 days')));
+                    ?>
+                    <tr>
+                        <td>
+                            <b><?= e($stk['item_name']) ?></b><br>
+                            <small class="muted"><?= e($stk['item_code']) ?></small>
+                        </td>
+                        <td>
+                            <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:11px"><?= e($stk['batch_number'] ?: 'STANDARD') ?></code>
+                        </td>
+                        <td>
+                            <?php if (!empty($stk['expiry_date'])): ?>
+                                <?php if ($isNearExpiry): ?>
+                                    <span class="badge" style="background:#fee2e2;color:#991b1b;border:1px solid #f87171;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700">⚠️ EXPIRING SOON</span><br>
+                                    <b style="color:#b91c1c;font-size:11px"><?= e(date('d M Y', strtotime($stk['expiry_date']))) ?></b>
+                                <?php else: ?>
+                                    <span style="font-size:12px"><?= e(date('d M Y', strtotime($stk['expiry_date']))) ?></span>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <span class="muted">N/A</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <b style="font-size:13px;color:#0f766e"><?= number_format((int)$stk['quantity']) ?></b>
+                        </td>
+                        <td><?= e($stk['unit'] ?: 'Units') ?></td>
+                        <td style="text-align:right">
+                            <a href="page.php?view=<?= $deptType === 'OT' ? 'ot_consumption' : ($deptType === 'OPD' ? 'opd_consumption' : ($deptType === 'IPD' ? 'ipd_consumption' : 'emergency')) ?>" class="button button-light" style="padding:4px 8px;font-size:11px" title="Dispense to patient">✚ Dispense</a>
+                            <a href="page.php?view=returns#add-return" class="button button-light" style="padding:4px 8px;font-size:11px" title="Return surplus to central store">↻ Return</a>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Panel 2: Recent Department Requisitions & Indents -->
+        <div class="panel" id="dept-requisitions">
+            <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <h2 style="font-size:15px;margin:0">Department Indents</h2>
+                    <small class="muted">Recent requisition orders to Central Store</small>
+                </div>
+                <a class="text-button" href="page.php?view=requisitions" style="font-size:12px">View All Reqs →</a>
+            </div>
+            <div class="table-wrap">
+                <?php if (empty($deptRecentReqs)): ?>
+                <div class="empty-state" style="padding:2rem 1rem;text-align:center">
+                    <span class="empty-icon" style="font-size:28px">📋</span>
+                    <p style="font-weight:600;margin:6px 0 2px">No requisitions submitted yet.</p>
+                    <small class="muted">Click "Indent from Central Store" to request stock.</small>
+                </div>
+                <?php else: ?>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Req Number</th>
+                            <th>Purpose / Date</th>
+                            <th>Items / Qty</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($deptRecentReqs as $rq): ?>
+                    <tr>
+                        <td>
+                            <b><?= e($rq['req_number']) ?></b><br>
+                            <small class="muted"><?= e($rq['dept_name']) ?></small>
+                        </td>
+                        <td>
+                            <span style="font-size:12px"><?= e($rq['purpose']) ?></span><br>
+                            <small class="muted"><?= e(date('d M Y', strtotime($rq['req_date']))) ?></small>
+                        </td>
+                        <td>
+                            <b><?= (int)$rq['total_qty_requested'] ?> units</b><br>
+                            <small class="muted"><?= (int)$rq['item_count'] ?> item<?= (int)$rq['item_count'] > 1 ? 's' : '' ?></small>
+                        </td>
+                        <td>
+                            <?= pill($rq['status']) ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Panel 3: Recent Patient Dispensing Activity ────────────── -->
+    <div class="panel" style="margin-bottom:1.5rem">
+        <div class="panel-heading" style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+                <h2 style="font-size:15px;margin:0">Recent Point-of-Care Patient Dispensing</h2>
+                <small class="muted">Real-time clinical consumption records across hospital wards</small>
+            </div>
+            <a class="text-button" href="page.php?view=reports&rtype=consumption" style="font-size:12px">Detailed Consumption Audit →</a>
+        </div>
+        <div class="table-wrap">
+            <?php if (empty($deptRecentDispensing)): ?>
+            <div class="empty-state" style="padding:2rem 1rem;text-align:center">
+                <span class="empty-icon" style="font-size:28px">🩺</span>
+                <p style="font-weight:600;margin:6px 0 2px">No patient dispensing records recorded today.</p>
+                <small class="muted">Dispense medicine or surgical supplies using clinical dispensing forms.</small>
+            </div>
+            <?php else: ?>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date &amp; Time</th>
+                        <th>Clinical Module</th>
+                        <th>Patient MR / Identifier</th>
+                        <th>Item Consumed</th>
+                        <th>Quantity</th>
+                        <th>Unit</th>
+                        <th>Sindh Manual Ref.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($deptRecentDispensing as $dsp): ?>
+                <tr>
+                    <td>
+                        <b><?= e(date('d M Y', strtotime($dsp['created_at']))) ?></b><br>
+                        <small class="muted"><?= e(date('H:i', strtotime($dsp['created_at']))) ?></small>
+                    </td>
+                    <td>
+                        <span class="badge" style="background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600"><?= e($dsp['type']) ?></span>
+                    </td>
+                    <td>
+                        <b><?= e($dsp['patient_mr'] ?: ($dsp['surgery_number'] ?: 'Floor Administration')) ?></b>
+                        <?php if (!empty($dsp['patient_name'])): ?><br><small class="muted"><?= e($dsp['patient_name']) ?></small><?php endif; ?>
+                    </td>
+                    <td>
+                        <b><?= e($dsp['item_name']) ?></b><br>
+                        <small class="muted"><?= e($dsp['item_code']) ?> · Batch: <?= e($dsp['batch_number'] ?: '-') ?></small>
+                    </td>
+                    <td>
+                        <b style="color:#0f766e;font-size:13px"><?= number_format((int)$dsp['quantity']) ?></b>
+                    </td>
+                    <td><?= e($dsp['unit'] ?: 'Units') ?></td>
+                    <td>
+                        <?php if (!empty($dsp['manual_register_name'])): ?>
+                            <small><b><?= e($dsp['manual_register_name']) ?></b> (Pg: <?= e($dsp['manual_register_page'] ?: '-') ?>)</small>
+                        <?php else: ?>
+                            <span class="muted">—</span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php endif; ?>
         </div>
     </div>
 

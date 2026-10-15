@@ -214,6 +214,33 @@ extract($headerCtx);
                             <div><b>All clear</b><small>No pending financial authorizations</small></div>
                         </li>
                         <?php endif; ?>
+                    <?php elseif (!empty($isDeptIncharge)): ?>
+                        <?php if (!empty($deptPendingReqs)): ?>
+                        <li class="ad-item ad-amber">
+                            <span class="ad-dot"></span>
+                            <div>
+                                <b><?= $deptPendingReqs ?> requisition<?= $deptPendingReqs > 1 ? 's' : '' ?> awaiting store issue</b>
+                                <small>Submitted to Central Store for dispatch</small>
+                            </div>
+                            <a href="<?= page_link('requisitions') ?>" class="ad-action">View →</a>
+                        </li>
+                        <?php endif; ?>
+                        <?php if (!empty($subStoreExpiring)): ?>
+                        <li class="ad-item ad-amber">
+                            <span class="ad-dot"></span>
+                            <div>
+                                <b><?= $subStoreExpiring ?> sub-store item<?= $subStoreExpiring > 1 ? 's' : '' ?> expiring in 30 days</b>
+                                <small>Dispense promptly or initiate return voucher</small>
+                            </div>
+                            <a href="<?= page_link('returns') ?>" class="ad-action">Return →</a>
+                        </li>
+                        <?php endif; ?>
+                        <?php if ($alertCount === 0): ?>
+                        <li class="ad-item ad-ok">
+                            <span class="ad-dot"></span>
+                            <div><b>All clear</b><small>No pending requisitions or expiring sub-store stock</small></div>
+                        </li>
+                        <?php endif; ?>
                     <?php else: ?>
                         <?php if ($criticalStock > 0): ?>
                         <li class="ad-item ad-red">
@@ -264,7 +291,7 @@ extract($headerCtx);
                     <?php endif; ?>
                 </ul>
                 <div class="alerts-dd-footer">
-                    <a href="<?= $isPurchaseOfficer ? page_link('reports') . '&rtype=purchase' : ($isStoreOfficer ? page_link('reports') . '&rtype=stock' : (!empty($isDDFinance) ? page_link('reports') . '&rtype=valuation' : page_link('reports'))) ?>">View full report →</a>
+                    <a href="<?= $isPurchaseOfficer ? page_link('reports') . '&rtype=purchase' : ($isStoreOfficer ? page_link('reports') . '&rtype=stock' : (!empty($isDDFinance) ? page_link('reports') . '&rtype=valuation' : (!empty($isDeptIncharge) ? page_link('reports') . '&rtype=consumption' : page_link('reports')))) ?>">View full report →</a>
                 </div>
             </div>
         </div>
@@ -376,6 +403,33 @@ extract($headerCtx);
         </a>
         <a class="h-nav-link <?= ($current === 'reports' && ($_GET['rtype'] ?? '') === 'purchase') ? 'active' : '' ?>" href="<?= page_link('reports') ?>&rtype=purchase">
             <span class="h-nav-icon">↗</span> PO Commitments
+        </a>
+        <?php elseif (!empty($isDeptIncharge)): ?>
+        <a class="h-nav-link <?= $current === 'dashboard' ? 'active' : '' ?>" href="index.php">
+            <span class="h-nav-icon">◈</span> Clinical Dashboard
+        </a>
+        <a class="h-nav-link <?= $current === 'requisitions' ? 'active' : '' ?>" href="<?= page_link('requisitions') ?>">
+            <span class="h-nav-icon">⌁</span> Department Requisitions
+            <?php if (!empty($deptPendingReqs)): ?><b class="h-nav-badge" style="background:#059669"><?= $deptPendingReqs ?></b><?php endif; ?>
+        </a>
+        <a class="h-nav-link <?= $current === 'returns' ? 'active' : '' ?>" href="<?= page_link('returns') ?>">
+            <span class="h-nav-icon">◫</span> Sub-Store Stock &amp; Returns
+            <?php if (!empty($subStoreExpiring)): ?><b class="h-nav-badge" style="background:#d97706"><?= $subStoreExpiring ?></b><?php endif; ?>
+        </a>
+        <a class="h-nav-link <?= $current === 'emergency' ? 'active' : '' ?>" href="<?= page_link('emergency') ?>">
+            <span class="h-nav-icon">!</span> Emergency
+        </a>
+        <a class="h-nav-link <?= $current === 'opd_consumption' ? 'active' : '' ?>" href="<?= page_link('opd_consumption') ?>">
+            <span class="h-nav-icon">✚</span> OPD Dispensing
+        </a>
+        <a class="h-nav-link <?= $current === 'ipd_consumption' ? 'active' : '' ?>" href="<?= page_link('ipd_consumption') ?>">
+            <span class="h-nav-icon">⊕</span> IPD Ward Dispensing
+        </a>
+        <a class="h-nav-link <?= $current === 'ot_consumption' ? 'active' : '' ?>" href="<?= page_link('ot_consumption') ?>">
+            <span class="h-nav-icon">⊗</span> OT Dispensing
+        </a>
+        <a class="h-nav-link <?= ($current === 'reports' && (($_GET['rtype'] ?? '') === 'consumption' || empty($_GET['rtype']))) ? 'active' : '' ?>" href="<?= page_link('reports') ?>&rtype=consumption">
+            <span class="h-nav-icon">▥</span> Consumption Reports
         </a>
         <?php else: ?>
         <a class="h-nav-link <?= $current === 'dashboard' ? 'active' : '' ?>" href="index.php">

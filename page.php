@@ -28,6 +28,11 @@ if (!can($view)) {
         header('Location: index.php');
         exit;
     }
+    if ((current_user()['role'] ?? '') === 'dept_incharge') {
+        flash('Access restricted: Under SIOVS Clinical SOPs, Department In-charges manage departmental sub-store indents, patient dispensing, and returns. Commercial procurement, warehouse receipts, and financial adjustments are restricted.', 'error');
+        header('Location: index.php');
+        exit;
+    }
     flash('Access denied: You do not have permission to access that section.', 'error');
     header('Location: index.php');
     exit;
@@ -423,6 +428,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ── Requisition issue (Multi-Tier Store -> Department Movement) ───
     if ($action === 'issue_requisition') {
+        if (!can('store_officer') && !can('admin')) {
+            flash('Unauthorized: Under SIOVS Segregation of Duties, only the Store Officer or Administrator can physically issue inventory from Central Store.', 'error');
+            header('Location: ' . page_link('requisitions'));
+            exit;
+        }
         $reqId = (int)$_POST['req_id'];
         $rStmt = $pdo->prepare('SELECT r.*, d.name AS dname FROM requisitions r JOIN departments d ON d.id=r.department_id WHERE r.id=?');
         $rStmt->execute([$reqId]);

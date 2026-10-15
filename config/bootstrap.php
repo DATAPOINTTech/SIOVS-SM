@@ -802,7 +802,7 @@ function can(string $perm): bool {
             'reconciliation',  // Manual register vs electronic ledger reconciliation
         ],
         'purchase_officer'    => ['purchase_orders','suppliers','inventory','reports'],
-        'dept_incharge'       => ['requisitions','opd_consumption','ipd_consumption','ot_consumption','emergency','reports'],
+        'dept_incharge'       => ['requisitions','opd_consumption','ipd_consumption','ot_consumption','emergency','reports','returns'],
         'data_entry'          => ['quick-entry','opd_consumption','ipd_consumption','emergency'],
         'dd_finance'          => ['adjustments','reports','verification','transactions','deletions','reconciliation','assets'],
         'internal_audit'      => ['reports','inventory','assets','grn','purchase_orders','adjustments','verification','batches','deletions','reconciliation'],
@@ -858,6 +858,7 @@ function get_header_context(PDO $pdo, array $u): array {
             'isPurchaseOfficer'   => true,
             'isStoreOfficer'      => false,
             'isDDFinance'         => false,
+            'isDeptIncharge'      => false,
             'poDraftCount'        => $poDraftCount,
             'poApprovedCount'     => $poApprovedCount,
             'poPartialCount'      => $poPartialCount,
@@ -903,6 +904,7 @@ function get_header_context(PDO $pdo, array $u): array {
             'isPurchaseOfficer'   => false,
             'isStoreOfficer'      => true,
             'isDDFinance'         => false,
+            'isDeptIncharge'      => false,
             'incomingPOs'         => $incomingPOs,
             'openPOs'             => $incomingPOs,
             'pendingGRNs'         => $pendingGRNs,
@@ -944,11 +946,68 @@ function get_header_context(PDO $pdo, array $u): array {
             'isPurchaseOfficer'   => false,
             'isStoreOfficer'      => false,
             'isDDFinance'         => true,
+            'isDeptIncharge'      => false,
             'pendingAdj'          => $pendingAdj,
             'pendingDeletions'    => $pendingDeletions,
             'pendingVer'          => $pendingVer,
             'openPOs'             => $openPOs,
             'stockValue'          => $stockValue,
+            'alertCount'          => $alertCount,
+            'pendingActions'      => $pendingActions,
+        ];
+    } elseif ($role === 'dept_incharge') {
+        // ── Department Incharge Specific Context (Clinical Operations & Sub-Store) ──
+        $deptStmt = $pdo->prepare('SELECT * FROM departments WHERE incharge = ? OR incharge LIKE ? LIMIT 1');
+        $deptStmt->execute([$u['name'] ?? '', '%' . ($u['name'] ?? '') . '%']);
+        $deptInfo = $deptStmt->fetch(PDO::FETCH_ASSOC);
+        $deptId   = $deptInfo['id'] ?? null;
+        $deptName = $deptInfo['name'] ?? 'Department Sub-Store';
+
+        $deptPendingReqs = (int)$pdo->query(
+            "SELECT COUNT(*) FROM requisitions WHERE " . ($deptId ? "department_id = {$deptId} AND " : "") . "status IN ('Draft','Approved')"
+        )->fetchColumn();
+
+        $subStoreItems = (int)$pdo->query(
+            "SELECT COUNT(DISTINCT item_id) FROM department_stock WHERE " . ($deptId ? "department_id = {$deptId} AND " : "") . "quantity > 0"
+        )->fetchColumn();
+
+        $subStoreUnits = (int)$pdo->query(
+            "SELECT COALESCE(SUM(quantity),0) FROM department_stock WHERE " . ($deptId ? "department_id = {$deptId} AND " : "") . "quantity > 0"
+        )->fetchColumn();
+
+        $subStoreExpiring = (int)$pdo->query(
+            "SELECT COUNT(*) FROM department_stock WHERE " . ($deptId ? "department_id = {$deptId} AND " : "") . "quantity > 0 AND expiry_date IS NOT NULL AND expiry_date >= '{$today}' AND expiry_date <= date('{$today}','+30 days')"
+        )->fetchColumn();
+
+        $alertCount = $deptPendingReqs + $subStoreExpiring;
+
+        $pendingActions = [];
+        if ($deptPendingReqs > 0) {
+            $pendingActions[] = [
+                'label' => "{$deptPendingReqs} department requisition" . ($deptPendingReqs > 1 ? 's' : '') . ' awaiting Central Store issue',
+                'link'  => page_link('requisitions'),
+                'perm'  => 'requisitions'
+            ];
+        }
+        if ($subStoreExpiring > 0) {
+            $pendingActions[] = [
+                'label' => "{$subStoreExpiring} sub-store item" . ($subStoreExpiring > 1 ? 's' : '') . ' expiring within 30 days · Review for dispensing or return',
+                'link'  => page_link('returns'),
+                'perm'  => 'returns'
+            ];
+        }
+
+        return [
+            'isPurchaseOfficer'   => false,
+            'isStoreOfficer'      => false,
+            'isDDFinance'         => false,
+            'isDeptIncharge'      => true,
+            'deptId'              => $deptId,
+            'deptName'            => $deptName,
+            'deptPendingReqs'     => $deptPendingReqs,
+            'subStoreItems'       => $subStoreItems,
+            'subStoreUnits'       => $subStoreUnits,
+            'subStoreExpiring'    => $subStoreExpiring,
             'alertCount'          => $alertCount,
             'pendingActions'      => $pendingActions,
         ];
@@ -970,6 +1029,7 @@ function get_header_context(PDO $pdo, array $u): array {
             'isPurchaseOfficer'   => false,
             'isStoreOfficer'      => false,
             'isDDFinance'         => false,
+            'isDeptIncharge'      => false,
             'criticalStock'       => $criticalStock,
             'nearExpiry30'        => $nearExpiry30,
             'pendingGRNs'         => $pendingGRNs,
